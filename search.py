@@ -150,6 +150,7 @@ def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_
 
     # Get number of searches to perform
     if num_searches_input is not None:
+        # Ensure num_searches is exactly what was requested (minimum 1, maximum length of search_terms)
         num_searches = min(max(1, num_searches_input), len(search_terms))
         print(f"Performing {num_searches} searches")
     else:
@@ -169,6 +170,7 @@ def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_
 
     # If requested searches exceed available terms, allow duplicates
     selected_terms = []
+    # Ensure we select exactly num_searches terms, no more, no less
     for i in range(num_searches):
         if not available_terms:  # If we've used all terms, reset the list
             available_terms = [term for term in search_terms if term not in selected_terms[-5:]]  # Avoid recent duplicates
@@ -177,6 +179,18 @@ def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_
             random.shuffle(available_terms)
 
         selected_terms.append(available_terms.pop(0))
+
+    # Double-check that we have exactly num_searches terms
+    if len(selected_terms) != num_searches:
+        print(f"Warning: Expected {num_searches} search terms but got {len(selected_terms)}. Adjusting...")
+        while len(selected_terms) < num_searches:
+            # Add more terms if needed
+            if not available_terms:
+                available_terms = search_terms.copy()
+                random.shuffle(available_terms)
+            selected_terms.append(available_terms.pop(0))
+        # Trim excess terms if needed
+        selected_terms = selected_terms[:num_searches]
 
     driver = None
     try:

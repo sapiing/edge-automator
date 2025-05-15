@@ -339,6 +339,7 @@ class EdgeAutomatorGUI:
                 print(f"\nRunning search on profile: {profile_name} ({i+1}/{len(selected_profiles)})")
 
                 # Run the search function with progress updates
+                # Fix for issue: when search count is 1, ensure we still process all profiles
                 search(
                     isPhone=is_phone,
                     num_searches_input=num_searches,
@@ -346,6 +347,12 @@ class EdgeAutomatorGUI:
                     stop_event=stop_event,
                     profile_path=profile_path
                 )
+
+                # Reset the stop_event if it was set during the search
+                # This ensures the next profile will be processed even if there was an issue
+                if stop_event.is_set() and i < len(selected_profiles) - 1:
+                    print("Resetting stop event to process next profile...")
+                    stop_event.clear()
 
                 # Update progress to 100% after each profile
                 update_progress(100)

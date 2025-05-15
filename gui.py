@@ -4,6 +4,8 @@ import threading
 import queue
 import sys
 import io
+import os
+import time
 from search import search
 from quest import quest
 
@@ -78,6 +80,10 @@ class EdgeAutomatorGUI:
         self.search_running = False
         self.quest_running = False
 
+        # Edge profiles
+        self.edge_profiles = self.get_edge_profiles()
+        self.profile_vars = {}  # Will store BooleanVars for profile checkboxes
+
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -122,6 +128,35 @@ class EdgeAutomatorGUI:
         search_count_entry = ttk.Entry(search_count_frame, textvariable=self.num_searches, width=5)
         search_count_entry.pack(side=tk.LEFT, padx=10, pady=10)
 
+        # Profile selection frame
+        profile_frame = ttk.LabelFrame(self.search_tab, text="Edge Profiles")
+        profile_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        if not self.edge_profiles:
+            ttk.Label(profile_frame, text="No Edge profiles found").pack(padx=10, pady=10)
+        else:
+            # Create a scrollable frame for profiles if there are many
+            profile_canvas = tk.Canvas(profile_frame, bg=DARK_BLUE, highlightthickness=0)
+            profile_scrollbar = ttk.Scrollbar(profile_frame, orient="vertical", command=profile_canvas.yview)
+            profile_scrollable_frame = ttk.Frame(profile_canvas)
+
+            profile_scrollable_frame.bind(
+                "<Configure>",
+                lambda e: profile_canvas.configure(scrollregion=profile_canvas.bbox("all"))
+            )
+
+            profile_canvas.create_window((0, 0), window=profile_scrollable_frame, anchor="nw")
+            profile_canvas.configure(yscrollcommand=profile_scrollbar.set)
+
+            profile_canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+            profile_scrollbar.pack(side="right", fill="y", pady=10)
+
+            # Add checkboxes for each profile
+            for profile_name, profile_path in self.edge_profiles.items():
+                var = tk.BooleanVar(value=profile_name == "Default")  # Default profile selected by default
+                self.profile_vars[profile_name] = var
+                ttk.Checkbutton(profile_scrollable_frame, text=profile_name, variable=var).pack(anchor="w", padx=5, pady=2)
+
         # Progress frame
         progress_frame = ttk.LabelFrame(self.search_tab, text="Progress")
         progress_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -148,6 +183,35 @@ class EdgeAutomatorGUI:
         info_frame.pack(fill=tk.X, padx=10, pady=10)
 
         ttk.Label(info_frame, text="Note: Quest mode only works properly on desktop.").pack(padx=10, pady=10)
+
+        # Profile selection frame
+        profile_frame = ttk.LabelFrame(self.quest_tab, text="Edge Profiles")
+        profile_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        if not self.edge_profiles:
+            ttk.Label(profile_frame, text="No Edge profiles found").pack(padx=10, pady=10)
+        else:
+            # Create a scrollable frame for profiles if there are many
+            profile_canvas = tk.Canvas(profile_frame, bg=DARK_BLUE, highlightthickness=0)
+            profile_scrollbar = ttk.Scrollbar(profile_frame, orient="vertical", command=profile_canvas.yview)
+            profile_scrollable_frame = ttk.Frame(profile_canvas)
+
+            profile_scrollable_frame.bind(
+                "<Configure>",
+                lambda e: profile_canvas.configure(scrollregion=profile_canvas.bbox("all"))
+            )
+
+            profile_canvas.create_window((0, 0), window=profile_scrollable_frame, anchor="nw")
+            profile_canvas.configure(yscrollcommand=profile_scrollbar.set)
+
+            profile_canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+            profile_scrollbar.pack(side="right", fill="y", pady=10)
+
+            # Add checkboxes for each profile (reusing the same BooleanVars from search tab)
+            for profile_name, profile_path in self.edge_profiles.items():
+                if profile_name not in self.profile_vars:
+                    self.profile_vars[profile_name] = tk.BooleanVar(value=profile_name == "Default")
+                ttk.Checkbutton(profile_scrollable_frame, text=profile_name, variable=self.profile_vars[profile_name]).pack(anchor="w", padx=5, pady=2)
 
         # Progress frame
         progress_frame = ttk.LabelFrame(self.quest_tab, text="Progress")
@@ -255,13 +319,41 @@ class EdgeAutomatorGUI:
             def update_progress(value):
                 self.root.after(0, lambda: self.search_progress.configure(value=value))
 
-            # Run the search function with progress updates
-            search(
-                isPhone=is_phone,
-                num_searches_input=num_searches,
-                progress_callback=update_progress,
-                stop_event=stop_event
-            )
+            # Get selected profiles
+            selected_profiles = []
+            for profile_name, var in self.profile_vars.items():
+                if var.get():
+                    selected_profiles.append((profile_name, self.edge_profiles[profile_name]))
+
+            if not selected_profiles:
+                print("No profiles selected. Please select at least one profile.")
+                return
+
+            print(f"Running search on {len(selected_profiles)} selected profiles")
+
+            # Run the search function for each selected profile
+            for i, (profile_name, profile_path) in enumerate(selected_profiles):
+                if stop_event.is_set():
+                    break
+
+                print(f"\nRunning search on profile: {profile_name} ({i+1}/{len(selected_profiles)})")
+
+                # Run the search function with progress updates
+                search(
+                    isPhone=is_phone,
+                    num_searches_input=num_searches,
+                    progress_callback=update_progress,
+                    stop_event=stop_event,
+                    profile_path=profile_path
+                )
+
+                # Update progress to 100% after each profile
+                update_progress(100)
+
+                # Small delay between profiles
+                if i < len(selected_profiles) - 1 and not stop_event.is_set():
+                    print("Waiting before starting next profile...")
+                    time.sleep(3)
 
             # Restore original Options
             if headless:
@@ -343,12 +435,40 @@ class EdgeAutomatorGUI:
                 self.root.after(0, lambda: self.quest_progress.stop())
                 self.root.after(0, lambda: self.quest_progress.configure(mode='determinate', value=value))
 
-            # Run the quest function with progress updates
-            quest(
-                isPhone=is_phone,
-                progress_callback=update_progress,
-                stop_event=stop_event
-            )
+            # Get selected profiles
+            selected_profiles = []
+            for profile_name, var in self.profile_vars.items():
+                if var.get():
+                    selected_profiles.append((profile_name, self.edge_profiles[profile_name]))
+
+            if not selected_profiles:
+                print("No profiles selected. Please select at least one profile.")
+                return
+
+            print(f"Running quest on {len(selected_profiles)} selected profiles")
+
+            # Run the quest function for each selected profile
+            for i, (profile_name, profile_path) in enumerate(selected_profiles):
+                if stop_event.is_set():
+                    break
+
+                print(f"\nRunning quest on profile: {profile_name} ({i+1}/{len(selected_profiles)})")
+
+                # Run the quest function with progress updates
+                quest(
+                    isPhone=is_phone,
+                    progress_callback=update_progress,
+                    stop_event=stop_event,
+                    profile_path=profile_path
+                )
+
+                # Update progress to 100% after each profile
+                update_progress(100)
+
+                # Small delay between profiles
+                if i < len(selected_profiles) - 1 and not stop_event.is_set():
+                    print("Waiting before starting next profile...")
+                    time.sleep(3)
 
             # Restore original Options
             if headless:
@@ -373,6 +493,33 @@ class EdgeAutomatorGUI:
         self.console_text.configure(state="normal")
         self.console_text.delete(1.0, tk.END)
         self.console_text.configure(state="disabled")
+
+    def get_edge_profiles(self):
+        """
+        Scans the Edge user data directory and returns a list of available profiles.
+        Returns a dictionary with profile names as keys and paths as values.
+        """
+        profiles = {}
+
+        # Path to Edge user data directory
+        edge_data_path = os.path.join(os.environ['LOCALAPPDATA'], 'Microsoft', 'Edge', 'User Data')
+
+        if os.path.exists(edge_data_path):
+            # Add Default profile
+            default_profile_path = os.path.join(edge_data_path, 'Default')
+            if os.path.exists(default_profile_path) and os.path.isdir(default_profile_path):
+                profiles['Default'] = default_profile_path
+
+            # Look for additional profiles (Profile 1, Profile 2, etc.)
+            for item in os.listdir(edge_data_path):
+                if item.startswith('Profile ') and os.path.isdir(os.path.join(edge_data_path, item)):
+                    profiles[item] = os.path.join(edge_data_path, item)
+
+            print(f"Found {len(profiles)} Edge profiles")
+        else:
+            print(f"Edge user data directory not found at: {edge_data_path}")
+
+        return profiles
 
     def on_closing(self):
         # Restore stdout

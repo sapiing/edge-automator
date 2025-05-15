@@ -5,8 +5,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import random
+import os
 
-def quest(isPhone=False, progress_callback=None, stop_event=None):
+def quest(isPhone=False, progress_callback=None, stop_event=None, profile_path=None):
     """
     Opens Edge browser, navigates to rewards.bing.com, and completes quests.
 
@@ -14,6 +15,7 @@ def quest(isPhone=False, progress_callback=None, stop_event=None):
         isPhone (bool): If True, uses mobile user agent and viewport size for iPhone 10
         progress_callback (callable, optional): Function to call with progress updates (0-100).
         stop_event (threading.Event, optional): Event to check for stopping the quest.
+        profile_path (str, optional): Path to Edge user profile. If None, uses default profile.
     """
     edge_options = Options()
 
@@ -29,6 +31,12 @@ def quest(isPhone=False, progress_callback=None, stop_event=None):
 
     driver = None
     try:
+        # Add user data directory if profile path is specified
+        if profile_path:
+            edge_options.add_argument(f"--user-data-dir={os.path.dirname(profile_path)}")
+            edge_options.add_argument(f"--profile-directory={os.path.basename(profile_path)}")
+            print(f"Using Edge profile: {profile_path}")
+
         driver = webdriver.Edge(options=edge_options)
         main_window = None
 

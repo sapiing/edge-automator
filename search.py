@@ -12,7 +12,7 @@ import time
 import os
 from datetime import datetime
 
-def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_event=None):
+def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_event=None, profile_path=None):
     """
     Opens Edge browser, navigates to Bing.com, and performs searches with a list of search terms.
     Implements human-like behavior by scrolling 3 times with delays between scrolls before moving to the next search term.
@@ -23,6 +23,7 @@ def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_
         num_searches_input (int, optional): Number of searches to perform. If None, will prompt user.
         progress_callback (callable, optional): Function to call with progress updates (0-100).
         stop_event (threading.Event, optional): Event to check for stopping the search.
+        profile_path (str, optional): Path to Edge user profile. If None, uses default profile.
     """
     # Setup Edge options
     edge_options = Options()
@@ -179,6 +180,12 @@ def search(isPhone=False, num_searches_input=None, progress_callback=None, stop_
 
     driver = None
     try:
+        # Add user data directory if profile path is specified
+        if profile_path:
+            edge_options.add_argument(f"--user-data-dir={os.path.dirname(profile_path)}")
+            edge_options.add_argument(f"--profile-directory={os.path.basename(profile_path)}")
+            print(f"Using Edge profile: {profile_path}")
+
         # Initialize the driver
         driver = webdriver.Edge(options=edge_options)
 
